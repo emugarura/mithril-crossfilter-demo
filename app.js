@@ -1,22 +1,31 @@
 // initializes an empty crossfilter
-var cf = crossfilter([]);
+var cf;
 
 var names = ['Einar', 'Stefán', 'Gísli', 'Eiríkur', 'Helgi'];
 var locations = ['Denmark', 'Sweden', 'Norway', 'Iceland', 'United States', 'United Kingdom'];
 
+
+var rows = [];
+
+for (var i = 0; i < 1000; ++i) {
+  rows.push(generateRow());
+}
+
+cf = crossfilter(rows);
 function generateRow() {
   return {
     name: names[Math.floor(Math.random() * names.length)],
-    location: locations[Math.floor(Math.random() * locations.length)]
+    location: locations[Math.floor(Math.random() * locations.length)],
+    count: 1
   };
 }
 
-window.setInterval(function(){
-  cf.add([generateRow()]);
-  // this is happening outside of mithrils auto redraw
-  // so we need to manually call a redraw
-  m.redraw();
-}, 30);
+// window.setInterval(function(){
+//   cf.add([generateRow()]);
+//   // this is happening outside of mithrils auto redraw
+//   // so we need to manually call a redraw
+//   m.redraw();
+// }, 30);
 
 var topComponent = {
   // we don't need a controller for this component
@@ -24,7 +33,10 @@ var topComponent = {
     return m('', [
       m('h1.page-title', 'Filterable tables demo'),
       m.component(table, {key: 'name'}),
-      m.component(table, {key: 'location'})
+      m.component(table, {key: 'location'}),
+      m('a[href=/data-entry]', {
+        config: m.route // to maintain an spa
+      }, 'Enter custom data')
     ]);
   }
 };
@@ -57,7 +69,15 @@ table.controller = function(data){
   //   function(p){return --p;},
   //   function(){return 0;}
   // );
-  ctrl.group = ctrl.dimension.group().reduceCount();
+  ctrl.group = ctrl.dimension.group().reduce(
+    function(p,v){
+      return p + v.count;
+    },
+    function(p,v){
+      return p - v.count;
+    },
+    function(){return 0;}
+  );
 
   ctrl.onClick = function(d) {
     var index;
@@ -94,18 +114,19 @@ table.controller = function(data){
 };
 
 table.view = function(ctrl){
+  // use top to get naturally ordered values
+  var all = ctrl.group.top(Infinity);
   return m('table', [
     m('thead', m('tr', [
       m('th', ctrl.dimension_name),
       m('th', 'count')
     ])),
-    m('tbody', [
-      ctrl.group.all().map(function(d){
-        var tdClick = {
-          key: d.key,
-          onclick: function() {
-            ctrl.onClick(d);
-          }
+    m('tbody',
+      all
+      // sort by descending value order
+      .map(function(d){
+        var tdClick = function() {
+          ctrl.onClick(d);
         };
         var trClass = '';
         // check if we have filters
@@ -119,17 +140,74 @@ table.view = function(ctrl){
             trClass = '.deselected';
           }
         }
-        return m('tr' + trClass, [
-          m('td', tdClick, d.key),
-          m('td', tdClick, d.value)
+        return m('tr' + trClass, {
+          key: d.key
+        }, [
+          m('td', {
+            onclick: tdClick,
+            key: d.key + '_key'
+          }, '' + d.key),
+          m('td', {
+            onclick: tdClick,
+            key: d.key + '_value'
+          }, '' + d.value)
         ]);
       })
-    ])
+    )
   ]);
+};
+
+var component404 = {
+  view: function() {
+    return m('h1.page-title', 'Couldn\'t find this route');
+  }
+};
+
+var dataEntry = {
+  controller: function(){
+    var ctrl = {
+      row: {
+        name: m.prop(''),
+        location: m.prop('')
+      },
+      addData: function(){
+        cf.add([{
+          name: ctrl.row.name(),
+          location: ctrl.row.location()
+        }]);
+      }
+    };
+    return ctrl;
+  },
+  view: function(ctrl) {
+    return m('', [
+      m('.input', [
+        m('.title', 'Name'),
+        m('input[type=text]', {
+          value: ctrl.row.name(),
+          oninput: m.withAttr('value', ctrl.row.name)
+        })
+      ]),
+      m('.input', [
+        m('.title', 'Location'),
+        m('input[type=text]', {
+          value: ctrl.row.location(),
+          oninput: m.withAttr('value', ctrl.row.location)
+        })
+      ]),
+      m('button[type=button]', {onclick: ctrl.addData}, 'Save'),
+      m('br'),
+      m('a[href=/]', {config: m.route}, 'Go back')
+    ]);
+  }
 };
 
 // the script is in the head tag so we need to wait for the browser
 // to create the body element before continuing
 window.onload = function() {
-  m.mount(document.body, topComponent);
+  m.route(document.body, '/', {
+    '/': topComponent,
+    '/data-entry': dataEntry,
+    '/:a...': component404
+  });
 };

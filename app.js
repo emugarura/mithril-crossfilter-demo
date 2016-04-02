@@ -114,7 +114,7 @@ table.controller = function(data){
 };
 
 table.view = function(ctrl){
-  // use top to get naturally ordered values
+  // use top to get naturally ordered valuesz
   var all = ctrl.group.top(Infinity);
   return m('table', [
     m('thead', m('tr', [
@@ -173,7 +173,8 @@ var dataEntry = {
       addData: function(){
         cf.add([{
           name: ctrl.row.name(),
-          location: ctrl.row.location()
+          location: ctrl.row.location(),
+          count: 1
         }]);
       }
     };
